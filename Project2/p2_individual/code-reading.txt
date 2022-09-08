@@ -1,0 +1,96 @@
+git access token: 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
+
+1. 29 -- #define sp  $29    /* stack pointer */
+2. LAMEbus --  * The only bus we support for MIPS is LAMEbus.
+3.  *      splhigh()    sets spl to the highest value, disabling all interrupts.
+ *      spl0()       sets spl to 0, enabling all interrupts.
+4. typedefs are used to avoid errors. * Note: while we define int64_t and u_int64_t, actually using them
+ * will in some cases cause odd link errors.
+5. The older interrupt state. -- 
+int curspl = SPL_HIGH;
+oldspl = curspl;
+curspl = newspl;
+return splx(SPL_HIGH);
+6. 15 -- #define SPL_HIGH   15
+7. 100 interrupts/second -- /* hardclocks per second */
+#define HZ  100
+8. d_open, d_close, d_io, d_ioctl --
+struct device {
+        int (*d_open)(struct device *, int flags_from_open);
+        int (*d_close)(struct device *);
+        int (*d_io)(struct device *, struct uio *);
+        int (*d_ioctl)(struct device *, int op, userptr_t data);
+9. 32 characters -- #define SFS_VOLNAME_SIZE  32            /* max length of volume name */
+10. 15 -- #define SFS_NDIRECT       15            /* # of direct blocks in inode */
+11. fs_sync, fs_getvolname, fs_getroot, fs_unmount -- * Abstract filesystem. (Or device accessible as a file.)
+ *
+ * Operations:
+ *
+ *      fs_sync       - Flush all dirty buffers to disk.
+ *      fs_getvolname - Return volume name of filesystem.
+ *      fs_getroot    - Return root vnode of filesystem.
+ *      fs_unmount    - Attempt unmount of filesystem.
+12. void thread_sleep(const void *addr);
+13. int32 == 32 bits -- typedef int32_t pid_t;   /* Process ID */
+14. int (*vop_open)(struct vnode *object, int flags_from_open);
+        int (*vop_close)(struct vnode *object);
+        int (*vop_reclaim)(struct vnode *vnode);
+
+
+        int (*vop_read)(struct vnode *file, struct uio *uio);
+        int (*vop_readlink)(struct vnode *link, struct uio *uio);
+        int (*vop_getdirentry)(struct vnode *dir, struct uio *uio);
+        int (*vop_write)(struct vnode *file, struct uio *uio);
+        int (*vop_ioctl)(struct vnode *object, int op, userptr_t data);
+        int (*vop_stat)(struct vnode *object, struct stat *statbuf);
+        int (*vop_gettype)(struct vnode *object, int *result);
+        int (*vop_tryseek)(struct vnode *object, off_t pos);
+        int (*vop_fsync)(struct vnode *object);
+        int (*vop_mmap)(struct vnode *file /* add stuff */);
+        int (*vop_truncate)(struct vnode *file, off_t len);
+        int (*vop_namefile)(struct vnode *file, struct uio *uio);
+
+
+        int (*vop_creat)(struct vnode *dir,
+                         const char *name, int excl,
+                         struct vnode **result);
+        int (*vop_symlink)(struct vnode *dir,
+                           const char *contents, const char *name);
+        int (*vop_mkdir)(struct vnode *parentdir,
+                         const char *name);
+        int (*vop_link)(struct vnode *dir,
+                        const char *name, struct vnode *file);
+        int (*vop_remove)(struct vnode *dir,
+                          const char *name);
+        int (*vop_rmdir)(struct vnode *dir,
+                         const char *name);
+
+        int (*vop_rename)(struct vnode *vn1, const char *name1,
+                          struct vnode *vn2, const char *name2);
+
+
+        int (*vop_lookup)(struct vnode *dir,
+                          char *pathname, struct vnode **result);
+        int (*vop_lookparent)(struct vnode *dir,
+                              char *pathname, struct vnode **result,
+                              char *buf, size_t len);
+15. 1024 characters -- /* Longest full path name */
+#define PATH_MAX   1024
+16. 8 -- #define SYS_reboot       8
+17. kern/include/kern/unistd.h -- #define STDIN_FILENO  0      /* Standard input */
+18. Yes, the initialized threads will wait for the scheduler to create a process queue.
+19.  * Remove zombies. (Zombies are threads/processes that have exited but not
+ * been fully deleted yet.)
+20. 32 -- static struct queue *runqueue;
+        runqueue = q_create(32);
+21. "device" --          * The name of a device is always just "device:". The VFS
+         * layer puts in the device name for us, so we don't need to
+         * do anything further.
+22. "raw" appended -- Name of raw device (eg, "lhd0raw").
+strcat(s, "raw");
+23. vn_countlock --         vn->vn_refcount = 1;
+        vn->vn_opencount = 0;
+        vn->vn_countlock = lock_create("vnode-countlock");
+24. Block devices and Character devices -- * Return the type. A device is a "block device" if it has a known
+ * length. A device that generates data in a stream is a "character
+ * device".

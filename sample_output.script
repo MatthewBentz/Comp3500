@@ -1,0 +1,79 @@
+┌──(kali㉿kali)-[~/Desktop/LocalProject5]
+└─$ make
+Creating object files...
+gcc -c policy.c -o policy.o
+Creating the scheduler...
+gcc -o scheduler policy.o scheduler.c
+                                                                                             
+┌──(kali㉿kali)-[~/Desktop/LocalProject5]
+└─$ ./scheduler wrongfilename  
+File wrongfilename can't be opened. Please retry...
+                                                                                             
+┌──(kali㉿kali)-[~/Desktop/LocalProject5]
+└─$ ./scheduler task.list RR                                                             
+Please supply a time quantum for Round Robin policy.
+Usage: scheduler task_list_file [FCFS|RR|SRTF] [time_quantum]  
+                                                                                           
+┌──(kali㉿kali)-[~/Desktop/LocalProject5]
+└─$ ./scheduler                                                                          
+Usage: scheduler task_list_file [FCFS|RR|SRTF] [time_quantum]   
+                                                                                          
+┌──(kali㉿kali)-[~/Desktop/LocalProject5]
+└─$ ./scheduler task.list FCFS                                                           
+Scheduling Policy: FCFS
+There are 6 tasks loaded from "task.list". Press any key to continue ...
+==================================================================
+<time 0> process 1 is running
+<time 1> process 1 is running
+<time 2> process 1 is running
+<time 3> process 1 is running
+<time 4> process 1 is running
+<time 5> process 1 is running
+<time 6> process 1 is running
+<time 7> process 1 is running
+<time 8> process 1 is running
+<time 9> process 1 is running
+<time 10> process 1 is finished...
+<time 10> process 2 is running
+<time 11> process 2 is running
+<time 12> process 2 is running
+<time 13> process 2 is running
+<time 14> process 2 is running
+<time 15> process 2 is running
+<time 16> process 2 is running
+<time 17> process 2 is running
+<time 18> process 2 is running
+<time 19> process 2 is finished...
+<time 19> process 3 is running
+<time 20> process 3 is running
+<time 21> process 3 is running
+<time 22> process 3 is running
+<time 23> process 3 is running
+<time 24> process 3 is finished...
+<time 24> process 4 is running
+<time 25> process 4 is running
+<time 26> process 4 is running
+<time 27> process 4 is running
+<time 28> process 4 is finished...
+<time 28> process 5 is running
+<time 29> process 5 is running
+<time 30> process 5 is running
+<time 31> process 5 is running
+<time 32> process 5 is running
+<time 33> process 5 is running
+<time 34> process 5 is finished...
+<time 34> process 6 is running
+<time 35> process 6 is running
+<time 36> process 6 is running
+<time 37> process 6 is running
+<time 38> process 6 is running
+<time 39> process 6 is running
+<time 40> process 6 is running
+<time 41> process 6 is finished...
+<time 41> All processes finish...
+==================================================================
+Average waiting time:    14.17
+Average response time:   14.17
+Average turnaround time: 21.00
+Overall CPU usage:      100.0%
+==================================================================

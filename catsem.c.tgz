@@ -1,0 +1,424 @@
+// --------
+// Includes
+
+#include <types.h>
+#include <lib.h>
+#include <test.h>
+#include <thread.h>
+#include <synch.h>
+
+// ---------
+// Constants
+
+#define NFOODBOWLS 2
+#define NCATS 6
+#define NMICE 2
+typedef enum {false, true} bool;
+
+// ---------
+// Variables
+
+volatile bool all_dishes_available = true;
+static struct semaphore *done;
+static struct semaphore *mutex;
+static struct semaphore *dish_mutex;
+
+static struct semaphore *cats_queue;
+volatile int cats_wait_count = 0;
+volatile bool no_cat_eat = true;
+
+static struct semaphore *mice_queue;
+volatile int mice_wait_count = 0;
+volatile bool no_mouse_eat = true;
+
+// -------------------- //
+// Function Definitions //
+
+static void setup();
+static void cleanup();
+static void cats_enter_kitchen(bool first_cat_eat, bool another_cat_eat);
+static void cat_eats_dish(unsigned long catnumber, int mydish, bool dish1_busy, bool dish2_busy);
+static void release_dishes(int mydish, bool dish1_busy, bool dish2_busy);
+static void switch_turn(bool first_cat_eat, bool another_cat_eat);
+
+
+/*
+ * Arguments:
+ *      catnumber: holds the cat identifier from 0 to NCATS - 1.
+ * Definition:
+ *      Executable code for a single animal (thread)
+ */
+
+static void catsem(void * unusedpointer, unsigned long catnumber)
+{
+        // Avoid unused variable warnings.
+        (void) unusedpointer;
+
+        // Cats currently eating
+        bool first_cat_eat = false;
+        bool another_cat_eat = false;
+
+        // Dishes currently being eaten
+        bool dish1_busy = false;
+        bool dish2_busy = false;
+        int mydish;
+
+        // Let the first cat in.
+        P(mutex);
+        if (all_dishes_available) {
+                all_dishes_available = false;
+                V(cats_queue);
+        }
+        cats_wait_count++;
+        V(mutex);
+
+        // First cat enters, others wait
+        kprintf(cats_queue->count);
+        P(cats_queue);
+        kprintf(cats_queue->count);
+        if (no_cat_eat) {
+                kprintf("no cat eat true\n");
+
+                no_cat_eat = false;
+                first_cat_eat = true;
+        } else {
+                first_cat_eat = false;
+        }
+
+        // First cat lets another cat in
+        if (first_cat_eat) {
+                kprintf("first cat eat true\n");
+
+                P(mutex);
+                if (cats_wait_count > 1) {
+                        kprintf("cats wait count > 1\n");
+
+                        another_cat_eat = true;
+                        V(cats_queue);
+                }
+                V(mutex);
+        }
+
+        kprintf("Cat %d is in the kitchen.\n", catnumber);
+
+        // Cat is assigned a dish
+        P(dish_mutex);
+        if (dish1_busy == false) {
+                kprintf("dish1 taken");
+                dish1_busy = true;
+                mydish = 1;
+        } else {
+                assert(dish2_busy == false);
+                kprintf("dish2 taken");
+                dish2_busy = true;
+                mydish = 2;
+        }
+        V(dish_mutex);
+
+        // Cat eats a dish
+        kprintf("Cat %d eating dish %d.\n", catnumber, mydish);
+        clocksleep(1);
+        kprintf("Cat %d finish eating.\n", catnumber);
+
+        // Release dishes
+        P(dish_mutex);
+        if (mydish == 1) {
+                assert(dish1_busy);
+                dish1_busy = false;
+                kprintf("dish1 freed");
+        } else {
+                assert(dish2_busy);
+                dish2_busy = false;
+                kprintf("dish2 freed");
+        }
+        V(dish_mutex);
+
+        cats_wait_count--;
+
+        //V(cats_queue);
+
+        if (first_cat_eat) {
+
+                if (another_cat_eat) {
+                        P(done);
+                }
+
+                kprintf("First cat is leaving.\n");
+                P(mutex);
+                
+                no_cat_eat = true;
+
+                if (mice_wait_count > 0) {
+                        // wakeup mice
+                        V(mice_queue);
+                } else {
+                        if (cats_wait_count > 0) {
+                                // wakeup cats
+                                V(cats_queue);
+                        } else {
+                                all_dishes_available = true;
+                        }
+                }
+
+                V(mutex);
+        } else {
+                kprintf("Second cat is leaving.\n");
+                V(done);
+
+                P(mutex);
+                
+                no_cat_eat = true;
+
+                if (mice_wait_count > 0) {
+                        // wakeup mice
+                        V(mice_queue);
+                } else {
+                        if (cats_wait_count > 0) {
+                                // wakeup cats
+                                V(cats_queue);
+                        } else {
+                                all_dishes_available = true;
+                        }
+                }
+
+                V(mutex);
+        }
+        /*
+        cats_enter_kitchen(first_cat_eat, another_cat_eat);
+
+        kprintf("Cat %d is in the kitchen.\n", catnumber);
+
+        cat_eats_dish(catnumber, mydish, dish1_busy, dish2_busy);
+
+        release_dishes(mydish, dish1_busy, dish2_busy);
+        
+        switch_turn(first_cat_eat, another_cat_eat);
+        */
+}
+        
+
+/*
+ * Arguments:
+ *      void * unusedpointer: currently unused.
+ *      unsigned long mousenumber: holds the mouse identifier from 0 to 
+ *              NMICE - 1.
+ *
+ * Returns:
+ *      nothing.
+ *
+ * Notes:
+ *      Write and comment this function using semaphores.
+ */
+
+static void mousesem(void * unusedpointer, unsigned long mousenumber)
+{
+        /*
+         * Avoid unused variable warnings.
+         */
+
+        (void) unusedpointer;
+        (void) mousenumber;
+}
+
+
+/*
+ * Arguments:
+ *      int nargs: unused.
+ *      char ** args: unused.
+ *
+ * Returns:
+ *      0 on success.
+ *
+ * Notes:
+ *      Driver code to start up catsem() and mousesem() threads.
+ */
+
+int catmousesem(int nargs, char ** args)
+{
+        int index, error;
+   
+        // Avoid unused variable warnings.
+
+        (void) nargs;
+        (void) args;
+
+        setup();
+
+        // Start NCATS catsem() threads.
+
+        for (index = 0; index < NCATS; index++) {
+           
+                error = thread_fork("catsem Thread", NULL, index, catsem, NULL);
+
+                if (error) {
+                        panic("catsem: thread_fork failed: %s\n", strerror(error));
+                }
+        }
+        
+        // Start NMICE mousesem() threads.
+
+        for (index = 0; index < NMICE; index++) {
+   
+                error = thread_fork("mousesem Thread", NULL, index, mousesem, NULL);
+
+                if (error) {
+                        panic("mousesem: thread_fork failed: %s\n", strerror(error));
+                }
+        }
+
+        // Wait until cat and mouse threads are done
+        while (cats_wait_count > 0 || mice_wait_count > 0){
+
+        }
+        // Cleanup
+        cleanup();
+
+        return 0;
+}
+
+static void setup() {
+        all_dishes_available = true;
+
+        done = sem_create("done", 0);
+        mutex = sem_create("mutex", 1);
+        dish_mutex = sem_create("dish_mutex", 1);
+
+        cats_queue = sem_create("cats", 0);
+        mice_queue = sem_create("mice", 0);
+        
+        cats_wait_count = 0;
+        no_cat_eat = true;
+
+        mice_wait_count = 0;
+        no_mouse_eat = true;
+}
+
+static void cleanup() {
+        sem_destroy(done);
+        sem_destroy(mutex);
+        sem_destroy(dish_mutex);
+        sem_destroy(cats_queue);
+        sem_destroy(mice_queue);
+        done = NULL;
+        mutex = NULL;
+        dish_mutex = NULL;
+        cats_queue = NULL;
+        mice_queue = NULL;
+}
+
+static void cats_enter_kitchen(bool first_cat_eat, bool another_cat_eat) {
+        kprintf("Cat enters kitchen method\n");
+        
+        
+        // Let the first cat in.
+        P(mutex);
+        if (all_dishes_available == true) {
+                kprintf("all dishes true");
+                all_dishes_available = false;
+                V(cats_queue);
+        }
+        cats_wait_count++;
+        V(mutex);
+
+        // First cat enters, others wait
+        kprintf(cats_queue);
+        P(cats_queue);
+        kprintf(cats_queue);
+        if (no_cat_eat == true) {
+                kprintf("no cat eat true");
+
+                no_cat_eat = false;
+                first_cat_eat = true;
+        } else {
+                first_cat_eat = false;
+        }
+
+        // First cat lets another cat in
+        if (first_cat_eat == true) {
+                kprintf("first cat eat true");
+
+                P(mutex);
+                if (cats_wait_count > 1) {
+                        kprintf("cats wait count > 1");
+
+                        another_cat_eat = true;
+                        V(cats_queue);
+                }
+                V(mutex);
+        }
+}
+
+static void cat_eats_dish(unsigned long catnumber, int mydish, bool dish1_busy, bool dish2_busy) {
+        kprintf("cat eats dish method\n");
+
+        // Cat is assigned a dish
+        P(mutex);
+        if (dish1_busy == false) {
+                dish1_busy = true;
+                mydish = 1;
+        } else {
+                assert(dish2_busy == false);
+                dish2_busy = true;
+                mydish = 2;
+        }
+        V(mutex);
+
+        // Cat eats a dish
+        kprintf("Cat %d eating dish %d.\n", catnumber, mydish);
+        clocksleep(1);
+        kprintf("Cat %d finish eating.\n", catnumber);
+}
+
+static void release_dishes(int mydish, bool dish1_busy, bool dish2_busy) {
+        kprintf("release dishes method\n");
+
+        // Release dishes
+        P(dish_mutex);
+        if (mydish == 1) {
+                assert(dish1_busy);
+                dish1_busy = false;
+        } else {
+                assert(dish2_busy);
+                dish2_busy = false;
+        }
+        V(dish_mutex);
+
+        P(mutex);
+        cats_wait_count--;
+        V(mutex);
+
+        //V(cats_queue);
+}
+
+static void switch_turn(bool first_cat_eat, bool another_cat_eat) {
+        kprintf("switch turns method\n");
+
+        if (first_cat_eat  == true) {
+
+                if (another_cat_eat  == true) {
+                        P(done);
+                }
+
+                kprintf("First cat is leaving.\n");
+                P(mutex);
+                
+                no_cat_eat = true;
+
+                if (mice_wait_count > 0) {
+                        // wakeup mice
+                        V(mice_queue);
+                } else {
+                        if (cats_wait_count > 0) {
+                                // wakeup cats
+                                V(cats_queue);
+                        } else {
+                                all_dishes_available = true;
+                        }
+                }
+
+                V(mutex);
+        } else {
+                kprintf("Second cat is leaving.\n");
+                V(done);
+        }
+}
